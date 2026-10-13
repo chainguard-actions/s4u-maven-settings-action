@@ -1,0 +1,33 @@
+name: Test oracleServers input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          oracleServers: '[{"id": "oracle-repo", "username": "oracle-user", "password": "oracle-pass"}]'
+          githubServer: "false"
+      - name: Assert settings.xml contains oracle server
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking settings.xml at $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "--- settings.xml content ---"
+          cat "$SETTINGS"
+          echo "----------------------------"
+          if ! grep -q "oracle-repo" "$SETTINGS"; then
+            echo "FAIL: expected oracle server id 'oracle-repo' not found in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "oracle-user" "$SETTINGS"; then
+            echo "FAIL: expected oracle username 'oracle-user' not found in settings.xml"
+            exit 1
+          fi
+          echo "PASS: oracle server configuration found in settings.xml"

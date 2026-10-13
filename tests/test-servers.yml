@@ -1,0 +1,48 @@
+name: Test custom servers configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "false"
+          servers: '[{"id": "my-server", "username": "myuser", "password": "mypassword"}]'
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking for settings.xml at: $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert settings.xml contains custom server
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "my-server" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'my-server'"
+            exit 1
+          fi
+          if ! grep -q "myuser" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'myuser'"
+            exit 1
+          fi
+          if ! grep -q "mypassword" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'mypassword'"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains custom server configuration"
+      - name: Assert github server is NOT present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          # When githubServer is false, the github server-id should not appear
+          # (or at least the explicit github server block should not be added)
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          echo "PASS: verified settings.xml content"

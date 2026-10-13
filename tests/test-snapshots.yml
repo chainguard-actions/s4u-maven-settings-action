@@ -1,0 +1,41 @@
+name: Test snapshot repositories
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "false"
+          sonatypeSnapshots: "true"
+          apacheSnapshots: "true"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking for settings.xml at: $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert settings.xml contains Sonatype snapshots repository
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "sonatype" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain any Sonatype snapshots URL"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains Sonatype snapshots repository"
+      - name: Assert settings.xml contains Apache snapshots repository
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if ! grep -q "repository.apache.org" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain Apache snapshots URL"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains Apache snapshots repository"

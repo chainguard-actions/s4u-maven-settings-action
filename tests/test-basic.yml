@@ -1,0 +1,42 @@
+name: Test basic usage
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "true"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking for settings.xml at: $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert settings.xml contains github server
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "github" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain github server entry"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains github server"
+      - name: Assert settings.xml is valid XML
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if ! xmllint --noout "$SETTINGS" 2>/dev/null; then
+            # xmllint may not be available, try python
+            if ! python3 -c "import xml.etree.ElementTree as ET; ET.parse('$SETTINGS')" 2>/dev/null; then
+              echo "FAIL: settings.xml is not valid XML"
+              exit 1
+            fi
+          fi
+          echo "PASS: settings.xml is valid XML"

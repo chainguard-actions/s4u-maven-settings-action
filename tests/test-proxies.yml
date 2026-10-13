@@ -1,0 +1,33 @@
+name: Test proxies input
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          proxies: '[{"id": "myproxy", "active": "true", "protocol": "http", "host": "proxy.example.com", "port": "8080", "nonProxyHosts": "localhost"}]'
+          githubServer: "false"
+      - name: Assert settings.xml contains proxy configuration
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking settings.xml at $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "--- settings.xml content ---"
+          cat "$SETTINGS"
+          echo "----------------------------"
+          if ! grep -q "proxy.example.com" "$SETTINGS"; then
+            echo "FAIL: expected proxy host 'proxy.example.com' not found in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "myproxy" "$SETTINGS"; then
+            echo "FAIL: expected proxy id 'myproxy' not found in settings.xml"
+            exit 1
+          fi
+          echo "PASS: proxy configuration found in settings.xml"

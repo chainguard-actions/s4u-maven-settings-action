@@ -1,0 +1,40 @@
+name: Test override false - do not overwrite existing settings.xml
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create existing settings.xml
+        run: |
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" << 'EOF'
+          <settings>
+            <servers>
+              <server>
+                <id>existing-server</id>
+                <username>existinguser</username>
+                <password>existingpass</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+          echo "Created existing settings.xml:"
+          cat "$HOME/.m2/settings.xml"
+      - id: action
+        uses: .
+        with:
+          override: "false"
+          githubServer: "false"
+          servers: '[{"id": "new-server", "username": "newuser", "password": "newpass"}]'
+      - name: Assert existing settings.xml was NOT overwritten
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml after action:"
+          cat "$SETTINGS"
+          if ! grep -q "existing-server" "$SETTINGS"; then
+            echo "FAIL: existing-server was removed - settings.xml was overwritten"
+            exit 1
+          fi
+          echo "PASS: existing settings.xml was preserved (not overwritten)"

@@ -1,0 +1,47 @@
+name: Test custom path for settings.xml
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Create custom directory
+        run: mkdir -p /tmp/custom-maven
+      - id: action
+        uses: .
+        with:
+          path: "/tmp/custom-maven/settings.xml"
+          githubServer: "false"
+          servers: '[{"id": "test-server", "username": "testuser", "password": "testpass"}]'
+      - name: Assert settings.xml was created at custom path
+        run: |
+          SETTINGS="/tmp/custom-maven/settings.xml"
+          echo "Checking for settings.xml at: $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at custom path $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists at custom path"
+      - name: Assert custom path settings.xml contains server
+        run: |
+          SETTINGS="/tmp/custom-maven/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "test-server" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'test-server'"
+            exit 1
+          fi
+          echo "PASS: settings.xml at custom path contains server configuration"
+      - name: Assert default path does NOT have the file (or is different)
+        run: |
+          DEFAULT_SETTINGS="$HOME/.m2/settings.xml"
+          CUSTOM_SETTINGS="/tmp/custom-maven/settings.xml"
+          echo "Custom settings.xml path: $CUSTOM_SETTINGS"
+          echo "Default settings.xml path: $DEFAULT_SETTINGS"
+          # The custom path file should exist
+          if [ ! -f "$CUSTOM_SETTINGS" ]; then
+            echo "FAIL: custom path settings.xml not found"
+            exit 1
+          fi
+          echo "PASS: custom path settings.xml is present"

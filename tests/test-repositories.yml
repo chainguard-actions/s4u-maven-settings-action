@@ -1,0 +1,57 @@
+name: Test custom repositories and plugin repositories
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "false"
+          repositories: '[{"id": "my-repo", "name": "My Repository", "url": "https://repo.example.com/releases", "snapshots": {"enabled": false}}]'
+          pluginRepositories: '[{"id": "my-plugin-repo", "name": "My Plugin Repository", "url": "https://repo.example.com/plugins", "snapshots": {"enabled": true}}]'
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Checking for settings.xml at: $SETTINGS"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert settings.xml contains custom repository
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "my-repo" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'my-repo'"
+            exit 1
+          fi
+          if ! grep -q "My Repository" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'My Repository'"
+            exit 1
+          fi
+          if ! grep -q "repo.example.com/releases" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain repository URL"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains custom repository"
+      - name: Assert settings.xml contains plugin repository
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if ! grep -q "my-plugin-repo" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'my-plugin-repo'"
+            exit 1
+          fi
+          if ! grep -q "My Plugin Repository" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain 'My Plugin Repository'"
+            exit 1
+          fi
+          if ! grep -q "repo.example.com/plugins" "$SETTINGS"; then
+            echo "FAIL: settings.xml does not contain plugin repository URL"
+            exit 1
+          fi
+          echo "PASS: settings.xml contains plugin repository"
