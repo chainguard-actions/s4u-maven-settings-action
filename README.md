@@ -9,6 +9,7 @@ Hardened by [Chainguard](https://www.chainguard.dev) from the upstream action at
 | Version | Tag | Upstream commit | Hardening report |
 |---------|-----|-----------------|------------------|
 | v4.0.0 | [`v4.0.0`](https://github.com/chainguard-actions/s4u-maven-settings-action/tree/v4.0.0) | [`894661b`](https://github.com/s4u/maven-settings-action/commit/894661b3ddae382f1ae8edbeab60987e08cf0788) | [`HARDENING.md`](https://github.com/chainguard-actions/s4u-maven-settings-action/blob/v4.0.0/HARDENING.md) |
+| v4.1.0 | [`v4.1.0`](https://github.com/chainguard-actions/s4u-maven-settings-action/tree/v4.1.0) | [`4cfd363`](https://github.com/s4u/maven-settings-action/commit/4cfd36368400327fd45dcb28f190ae7b85533deb) | [`HARDENING.md`](https://github.com/chainguard-actions/s4u-maven-settings-action/blob/v4.1.0/HARDENING.md) |
 
 ## Privacy
 
