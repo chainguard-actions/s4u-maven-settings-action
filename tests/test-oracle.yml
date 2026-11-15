@@ -1,0 +1,42 @@
+name: Test oracle servers and repo configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "false"
+          oracleRepo: "true"
+          oracleServers: '[{"id": "maven.oracle.com", "username": "oracleuser", "password": "oraclepass"}]'
+      - name: Assert oracle server and repo present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          for expected in "<id>maven.oracle.com</id>" "<username>oracleuser</username>" "<password>oraclepass</password>"; do
+            if ! grep -qF "$expected" "$SETTINGS"; then
+              echo "FAIL: expected '$expected' in settings.xml"
+              exit 1
+            fi
+          done
+          if ! grep -q "<server>" "$SETTINGS"; then
+            echo "FAIL: expected <server> element"
+            exit 1
+          fi
+          if ! grep -qi "maven.oracle.com" "$SETTINGS"; then
+            echo "FAIL: expected oracle repo url"
+            exit 1
+          fi
+          if grep -q "<id>github</id>" "$SETTINGS"; then
+            echo "FAIL: github server should not be present"
+            exit 1
+          fi
+          echo "PASS: oracle server entry found"

@@ -1,0 +1,414 @@
+/*
+The MIT License (MIT)
+
+Copyright (c) 2020 Slawomir Jaranowski and contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+
+import * as core from '@actions/core';
+import os from 'os';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+function getSettingsPath() {
+    const _path = core.getInput('path');
+    if (!_path) {
+        return path.join(os.homedir(), '.m2', 'settings.xml');
+    } else {
+        return _path;
+    }
+}
+
+function getTemplate(templateName) {
+    const templatePath = path.join(__dirname, 'templates', templateName);
+    const templateStr = fs.readFileSync(templatePath).toString();
+    return new DOMParser().parseFromString(templateStr, 'text/xml');
+}
+
+function writeSettings(settingsPath, templateXml) {
+
+    // create .m2 directory if not exists
+    if (!fs.existsSync(path.dirname(settingsPath))) {
+        fs.mkdirSync(path.dirname(settingsPath));
+    }
+
+    const settingStr = new XMLSerializer().serializeToString(templateXml);
+    fs.writeFileSync(settingsPath, settingStr);
+}
+
+function jsonToXml(templateXml, xmlTag, json) {
+    for (const key in json) {
+        const keyXml = templateXml.createElement(key);
+        const value = json[key];
+        if (value instanceof Object) {
+            jsonToXml(templateXml, keyXml, value);
+        } else {
+            keyXml.textContent = value;
+        }
+        xmlTag.appendChild(keyXml);
+    }
+}
+
+function fillServer(templateXml, templateName, id, username, password, privateKey, passphrase, filePermissions, directoryPermissions, configurations, repositoryOrigins) {
+
+    if (!id || (!username && !configurations)) {
+        core.setFailed(templateName + ' must contain id, and username or configuration');
+        return;
+    }
+
+    const serverXml = getTemplate(templateName + '.xml')
+    serverXml.getElementsByTagName('id')[0].textContent = id;
+
+    const serverTags = {
+        'username': username,
+        'password': password,
+        'privateKey': privateKey,
+        'passphrase': passphrase,
+        'filePermissions': filePermissions,
+        'directoryPermissions': directoryPermissions
+    };
+    for (const tag in serverTags) {
+        const serverTag = serverXml.getElementsByTagName(tag)[0];
+        const tagValue = serverTags[tag];
+        if (tagValue) {
+            serverTag.textContent = tagValue;
+        } else {
+            serverXml.documentElement.removeChild(serverTag);
+        }
+    }
+
+    const configurationTag = serverXml.getElementsByTagName('configuration')[0];
+    if (configurations) {
+        jsonToXml(templateXml, configurationTag, configurations);
+    } else {
+        if (configurationTag.childNodes.length == 0) {
+            serverXml.documentElement.removeChild(configurationTag);
+        }
+    }
+
+    const repositoryOriginsTag = serverXml.getElementsByTagName('repositoryOrigins')[0];
+    if (repositoryOrigins && repositoryOrigins.length > 0) {
+        [].concat(repositoryOrigins).forEach((repositoryOrigin) => {
+            const repositoryOriginXml = templateXml.createElement('repositoryOrigin');
+            repositoryOriginXml.textContent = repositoryOrigin;
+            repositoryOriginsTag.appendChild(repositoryOriginXml);
+        });
+    } else {
+        serverXml.documentElement.removeChild(repositoryOriginsTag);
+    }
+
+    const serversXml = templateXml.getElementsByTagName('servers')[0];
+    while (serverXml.firstChild) serversXml.appendChild(serverXml.firstChild);
+}
+
+function fillServers(template, templateName) {
+
+    const servers = core.getInput(templateName);
+
+    if (!servers) {
+        return;
+    }
+
+    JSON.parse(servers).forEach((server) =>
+        fillServer(template, templateName, server.id, server.username,
+            server.password, server.privateKey, server.passphrase,
+            server.filePermissions, server.directoryPermissions,
+            server.configuration, server.repositoryOrigins));
+}
+
+function fillRepository(templateXml, templateName, id, name, url, releases, snapshots) {
+
+    if (!id || !url) {
+        core.setFailed(templateName + ' must contain id and url');
+        return;
+    }
+
+    const repositoryXml = getTemplate(templateName + '.xml')
+    repositoryXml.getElementsByTagName('id')[0].textContent = id;
+
+    const repositoryTags = {
+        'name': name,
+        'url': url
+    };
+    for (const tag in repositoryTags) {
+        const repositoryTag = repositoryXml.getElementsByTagName(tag)[0];
+        const tagValue = repositoryTags[tag];
+        if (tagValue) {
+            repositoryTag.textContent = tagValue;
+        } else {
+            repositoryXml.documentElement.removeChild(repositoryTag);
+        }
+    }
+
+    const additionalTags = {
+        'releases': releases,
+        'snapshots': snapshots
+    };
+    for (const tag in additionalTags) {
+        const repositoryTag = repositoryXml.getElementsByTagName(tag)[0];
+        const tagValue = additionalTags[tag];
+        if (tagValue) {
+            jsonToXml(templateXml, repositoryTag, tagValue);
+        } else {
+            repositoryXml.documentElement.removeChild(repositoryTag);
+        }
+    }
+
+    const repositoriesXml = templateXml.getElementsByTagName(templateName)[0];
+    while (repositoryXml.firstChild) repositoriesXml.appendChild(repositoryXml.firstChild);
+}
+
+function fillRepositories(template) {
+
+    const repositories = core.getInput('repositories');
+    const pluginRepositories = core.getInput('pluginRepositories');
+
+    if (!repositories && !pluginRepositories) {
+        return;
+    }
+
+
+    const customRepositoriesTemplate = getTemplate('custom-repositories.xml');
+
+    if (repositories) {
+        JSON.parse(repositories).forEach((repository) =>
+            fillRepository(customRepositoriesTemplate, 'repositories',
+                repository.id, repository.name, repository.url, repository.releases, repository.snapshots));
+    }
+    if (pluginRepositories) {
+        JSON.parse(pluginRepositories).forEach((repository) =>
+            fillRepository(customRepositoriesTemplate, 'pluginRepositories',
+                repository.id, repository.name, repository.url, repository.releases, repository.snapshots));
+    }
+
+    const profilesXml = template.getElementsByTagName('profiles')[0];
+    while (customRepositoriesTemplate.firstChild) profilesXml.appendChild(customRepositoriesTemplate.firstChild);
+}
+
+function fillMirror(template, id, name, mirrorOf, url) {
+
+    if (!id || !name || !mirrorOf || !url) {
+        core.setFailed('mirrors must contain id, name, mirrorOf and url');
+        return;
+    }
+
+    const mirrorXml = getTemplate('mirrors.xml');
+    mirrorXml.getElementsByTagName('id')[0].textContent = id;
+    mirrorXml.getElementsByTagName('name')[0].textContent = name;
+    mirrorXml.getElementsByTagName('mirrorOf')[0].textContent = mirrorOf;
+    mirrorXml.getElementsByTagName('url')[0].textContent = url;
+
+    const mirrorsXml = template.getElementsByTagName('mirrors')[0];
+    while (mirrorXml.firstChild) mirrorsXml.appendChild(mirrorXml.firstChild);
+}
+
+function fillMirrors(template) {
+
+    const mirrors = core.getInput('mirrors');
+
+    if (!mirrors) {
+        return;
+    }
+
+    JSON.parse(mirrors).forEach((mirror) => fillMirror(template, mirror.id, mirror.name, mirror.mirrorOf, mirror.url));
+}
+
+function fillProxies(template) {
+    
+    const proxies = core.getInput('proxies');
+
+    if (!proxies) {
+        return;
+    }
+
+    JSON.parse(proxies).forEach((proxy) => fillProxy(template, proxy.id, proxy.active, proxy.protocol, proxy.host, proxy.port, proxy.nonProxyHosts, proxy.user, proxy.password));
+}
+
+function fillProxy(template, id, active, protocol, host, port, nonProxyHosts, proxyUser, proxyPassword) {
+    if(!id || !active || !protocol || !host || !port || !nonProxyHosts) {
+        core.setFailed('proxies must contain id, active, protocol, host, port and nonProxyHosts');
+        return;
+    }
+
+    const proxyXml = getTemplate('proxy.xml');
+    proxyXml.getElementsByTagName("id")[0].textContent = id;
+    proxyXml.getElementsByTagName("active")[0].textContent = active;
+    proxyXml.getElementsByTagName("protocol")[0].textContent = protocol;
+    proxyXml.getElementsByTagName("host")[0].textContent = host;
+    proxyXml.getElementsByTagName("port")[0].textContent = port;
+    proxyXml.getElementsByTagName("nonProxyHosts")[0].textContent = nonProxyHosts;
+
+    if(proxyUser) {
+        jsonToXml(proxyXml, proxyXml.documentElement, {username: proxyUser});
+    }
+    if(proxyPassword) {
+        jsonToXml(proxyXml, proxyXml.documentElement, {password: proxyPassword});
+    }
+    
+    const proxiesXml = template.getElementsByTagName('proxies')[0];
+    while (proxyXml.firstChild) proxiesXml.appendChild(proxyXml.firstChild);
+}
+
+function isInputTrue(inputName) {
+    const val = core.getInput(inputName);
+    return val && val.toLocaleLowerCase() == 'true';
+}
+
+function fillServerForGithub(templateXml) {
+
+    if (!isInputTrue('githubServer')) {
+        return;
+    }
+
+    fillServer(templateXml, 'servers', 'github', '${env.GITHUB_ACTOR}', '${env.GITHUB_TOKEN}');
+}
+
+function fillProperties(template) {
+
+    const properties = core.getInput('properties');
+
+    if (!properties) {
+        return;
+    }
+
+    const propertiesProfileXml = getTemplate('properties.xml');
+    const propertiesXml = propertiesProfileXml.getElementsByTagName('properties')[0];
+
+    JSON.parse(properties).forEach((property) => {
+        for (const key in property) {
+            const keyXml = template.createElement(key);
+            keyXml.textContent = property[key];
+            propertiesXml.appendChild(keyXml);
+        }
+    });
+
+    const profilesXml = template.getElementsByTagName('profiles')[0];
+    while (propertiesProfileXml.firstChild) profilesXml.appendChild(propertiesProfileXml.firstChild);
+
+}
+
+function addProfile(template, profileName) {
+    const sonatypeXml = getTemplate(profileName);
+    const profilesXml = template.getElementsByTagName('profiles')[0];
+    while (sonatypeXml.firstChild) profilesXml.appendChild(sonatypeXml.firstChild);
+}
+
+function addApacheSnapshots(template) {
+    if (isInputTrue('apacheSnapshots')) {
+        addProfile(template, 'apache-snapshot.xml')
+    }
+}
+
+function addSonatypeSnapshots(template) {
+    if (isInputTrue('sonatypeSnapshots')) {
+        addProfile(template, 'sonatype-snapshot.xml')
+    }
+}
+
+function addOracleRepo(template) {
+    if (isInputTrue('oracleRepo')) {
+        addProfile(template, 'oracle-repo.xml')
+    }
+}
+
+function fillActiveProfiles(template) {
+
+    const activeProfilesXml = template.getElementsByTagName('activeProfiles')[0];
+    const profiles = template.getElementsByTagName('profiles')[0].getElementsByTagName('profile');
+
+    for (let i = 0; i < profiles.length; i++) {
+        const profileId = Array.from(profiles[i].childNodes).find((node) => node.nodeName == 'id');
+        const activeProfileXml = template.createElement('activeProfile');
+        activeProfileXml.textContent = profileId.textContent;
+        activeProfilesXml.appendChild(activeProfileXml);
+    }
+
+    if (profiles.length == 0) {
+        template.documentElement.removeChild(activeProfilesXml);
+    }
+}
+
+function generate() {
+
+    const settingsPath = getSettingsPath();
+
+    core.info('Prepare maven settings: ' + settingsPath);
+
+    if (fs.existsSync(settingsPath)) {
+        if (isInputTrue('override')) {
+            core.info('maven settings.xml already exists - override');
+        } else {
+            core.warning('maven settings.xml already exists - skip');
+            return;
+        }
+    }
+
+    const settingsXml = getTemplate('settings.xml');
+    fillProxies(settingsXml);
+    fillMirrors(settingsXml);
+    fillServers(settingsXml, 'servers');
+    fillServers(settingsXml, 'oracleServers');
+    fillServerForGithub(settingsXml);
+    fillProperties(settingsXml);
+    addApacheSnapshots(settingsXml);
+    addSonatypeSnapshots(settingsXml);
+    addOracleRepo(settingsXml);
+    fillRepositories(settingsXml)
+    fillActiveProfiles(settingsXml);
+    writeSettings(settingsPath, settingsXml);
+    core.saveState('maven-settings', 'ok');
+}
+
+function cleanup() {
+
+    const mavenSettingsState = core.getState('maven-settings');
+    const settingsPath = getSettingsPath();
+    if (mavenSettingsState == 'ok') {
+        if (fs.existsSync(settingsPath)) {
+            fs.unlinkSync(settingsPath);
+            core.info('Cleanup maven settings: ' + settingsPath + ' - file was removed');
+        } else {
+            core.warning('Cleanup maven settings: ' + settingsPath + ' - file not exist');
+        }
+    } else {
+        core.info('Cleanup maven settings: ' + settingsPath + ' - file wasn\'t generated by action');
+    }
+}
+
+export {
+    getTemplate,
+    writeSettings,
+    fillMirrors,
+    fillServers,
+    fillProxies,
+    fillServerForGithub,
+    fillProperties,
+    fillRepositories,
+    addApacheSnapshots,
+    addSonatypeSnapshots,
+    addOracleRepo,
+    fillActiveProfiles,
+    generate,
+    cleanup
+}

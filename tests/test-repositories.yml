@@ -1,0 +1,48 @@
+name: Test custom repositories and plugin repositories
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          repositories: '[{"id": "my-repo", "name": "My Repository", "url": "https://repo.example.com/releases", "snapshots": {"enabled": false}}]'
+          pluginRepositories: '[{"id": "my-plugin-repo", "name": "My Plugin Repository", "url": "https://plugins.example.com/releases", "snapshots": {"enabled": false}}]'
+          githubServer: "false"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert custom repository is present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "my-repo" "$SETTINGS"; then
+            echo "FAIL: expected repository id 'my-repo' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "repo.example.com" "$SETTINGS"; then
+            echo "FAIL: expected repository URL in settings.xml"
+            exit 1
+          fi
+          echo "PASS: custom repository found"
+      - name: Assert custom plugin repository is present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if ! grep -q "my-plugin-repo" "$SETTINGS"; then
+            echo "FAIL: expected plugin repository id 'my-plugin-repo' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "plugins.example.com" "$SETTINGS"; then
+            echo "FAIL: expected plugin repository URL in settings.xml"
+            exit 1
+          fi
+          echo "PASS: custom plugin repository found"

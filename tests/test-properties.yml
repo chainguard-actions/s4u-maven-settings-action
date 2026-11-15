@@ -1,0 +1,39 @@
+name: Test properties configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          properties: '[{"myProperty": "myValue"}, {"anotherProp": "anotherValue"}]'
+          githubServer: "false"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert properties are present in settings.xml
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "myProperty" "$SETTINGS"; then
+            echo "FAIL: expected property 'myProperty' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "myValue" "$SETTINGS"; then
+            echo "FAIL: expected property value 'myValue' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "anotherProp" "$SETTINGS"; then
+            echo "FAIL: expected property 'anotherProp' in settings.xml"
+            exit 1
+          fi
+          echo "PASS: properties found in settings.xml"

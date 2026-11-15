@@ -1,0 +1,43 @@
+name: Test servers configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          servers: '[{"id": "my-server", "username": "myuser", "password": "mypassword"}]'
+          githubServer: "false"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert custom server is present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "my-server" "$SETTINGS"; then
+            echo "FAIL: expected server id 'my-server' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "myuser" "$SETTINGS"; then
+            echo "FAIL: expected username 'myuser' in settings.xml"
+            exit 1
+          fi
+          echo "PASS: custom server entry found"
+      - name: Assert github server is not present when disabled
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if grep -q "<id>github</id>" "$SETTINGS"; then
+            echo "FAIL: github server should not be present when githubServer=false"
+            exit 1
+          fi
+          echo "PASS: github server not present as expected"

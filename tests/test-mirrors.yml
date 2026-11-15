@@ -1,0 +1,39 @@
+name: Test mirrors configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          mirrors: '[{"id": "central-mirror", "name": "Central Mirror", "mirrorOf": "central", "url": "https://repo.example.com/maven2"}]'
+          githubServer: "false"
+      - name: Assert settings.xml was created
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "PASS: settings.xml exists"
+      - name: Assert mirror is present in settings.xml
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          if ! grep -q "central-mirror" "$SETTINGS"; then
+            echo "FAIL: expected mirror id 'central-mirror' in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "repo.example.com" "$SETTINGS"; then
+            echo "FAIL: expected mirror URL in settings.xml"
+            exit 1
+          fi
+          if ! grep -q "central" "$SETTINGS"; then
+            echo "FAIL: expected mirrorOf 'central' in settings.xml"
+            exit 1
+          fi
+          echo "PASS: mirror entry found"

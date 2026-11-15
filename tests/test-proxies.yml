@@ -1,0 +1,36 @@
+name: Test proxies configuration
+on:
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - id: action
+        uses: .
+        with:
+          githubServer: "false"
+          proxies: '[{"id": "my-proxy", "active": "true", "protocol": "http", "host": "proxy.example.com", "port": "8080", "nonProxyHosts": "localhost|127.0.0.1", "user": "proxyuser", "password": "proxypass"}]'
+      - name: Assert proxy entry present
+        run: |
+          SETTINGS="$HOME/.m2/settings.xml"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "FAIL: settings.xml not found at $SETTINGS"
+            exit 1
+          fi
+          echo "Contents of settings.xml:"
+          cat "$SETTINGS"
+          for expected in "<id>my-proxy</id>" "<active>true</active>" "<protocol>http</protocol>" \
+                          "<host>proxy.example.com</host>" "<port>8080</port>" \
+                          "<nonProxyHosts>localhost|127.0.0.1</nonProxyHosts>" \
+                          "<username>proxyuser</username>" "<password>proxypass</password>"; do
+            if ! grep -qF "$expected" "$SETTINGS"; then
+              echo "FAIL: expected '$expected' in settings.xml"
+              exit 1
+            fi
+          done
+          if ! grep -q "<proxy>" "$SETTINGS"; then
+            echo "FAIL: expected <proxy> element"
+            exit 1
+          fi
+          echo "PASS: proxy entry found"
